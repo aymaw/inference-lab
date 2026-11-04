@@ -1,14 +1,14 @@
-FROM python:3.12-slim AS builder
+ARG PYTHON_IMAGE=python:3.12-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30
+FROM ${PYTHON_IMAGE} AS builder
 WORKDIR /build
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.9.0
-COPY pyproject.toml README.md ./
+RUN pip install --no-cache-dir uv==0.12.5
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
-RUN pip install --no-cache-dir .
-RUN python -m inferlab.train --out /model
+RUN uv sync --frozen --no-dev --no-editable
+RUN /opt/venv/bin/python -m inferlab.train --out /model
 
-FROM python:3.12-slim
+FROM ${PYTHON_IMAGE}
 RUN useradd --uid 10001 --create-home runner
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder --chown=10001:10001 /model /app/model
