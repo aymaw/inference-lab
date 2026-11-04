@@ -3,12 +3,12 @@
   "requests": 200,
   "concurrency": 16,
   "successes": 200,
-  "seconds": 0.15120654087513685,
-  "requests_per_second": 1322.6941033268909,
+  "seconds": 0.15375158423557878,
+  "requests_per_second": 1300.7996047283598,
   "latency_ms_p50_p95_p99": [
-    7.784167071804404,
-    9.232581546530126,
-    35.846456652507186
+    7.993958657607436,
+    9.372812462970614,
+    33.632078492082655
   ],
   "counters_including_one_warmup": {
     "batches": 14,
