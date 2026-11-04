@@ -1,1 +1,21 @@
-{"uid": 10001, "ready": {"ready": true, "version": "synthetic-mlp-v1"}, "prediction": {"request_id": "bfcb5e97-d5de-4c62-a96c-43e21034ff77", "model_version": "synthetic-mlp-v1", "label": 0, "probabilities": [0.9520148038864136, 0.022912025451660156, 0.0250730998814106]}, "scope": "Docker Linux ARM64, in-container ASGI test, read-only filesystem"}
+{
+  "scope": "HTTP loopback to running container",
+  "ready": {
+    "ready": true,
+    "version": "synthetic-mlp-v1"
+  },
+  "prediction": {
+    "request_id": "4ae6da61-d84a-4bd9-9f54-97630ea99fff",
+    "model_version": "synthetic-mlp-v1",
+    "label": 0,
+    "probabilities": [
+      0.9520148038864136,
+      0.022912025451660156,
+      0.0250730998814106
+    ]
+  },
+  "uid": 10001,
+  "read_only_root_filesystem": true,
+  "platform": "Linux ARM64",
+  "image_sha256": "dc14e6b0a9f725c7caeb7a274b7d6e4bd6487b381915298cf4d6a3fb7834b2fa"
+}
