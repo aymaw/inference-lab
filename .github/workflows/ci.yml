@@ -26,3 +26,15 @@ jobs:
       - run: uv run pytest -q
       - run: uv run python -m inferlab.train --out runs/model
       - run: uv run python -m build
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t inference-lab:ci .
+      - run: >-
+          docker run -d --name inference-lab-ci --read-only --cap-drop ALL
+          --security-opt no-new-privileges -p 127.0.0.1:8000:8000 inference-lab:ci
+      - run: test "$(docker exec inference-lab-ci id -u)" = "10001"
+      - run: python3 tests/container_smoke.py
+      - if: always()
+        run: docker logs inference-lab-ci; docker stop inference-lab-ci
