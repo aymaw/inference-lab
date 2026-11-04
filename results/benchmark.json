@@ -1,0 +1,18 @@
+{
+  "scope": "in-process ASGI on CPU",
+  "requests": 200,
+  "concurrency": 16,
+  "successes": 200,
+  "seconds": 0.15120654087513685,
+  "requests_per_second": 1322.6941033268909,
+  "latency_ms_p50_p95_p99": [
+    7.784167071804404,
+    9.232581546530126,
+    35.846456652507186
+  ],
+  "counters_including_one_warmup": {
+    "batches": 14,
+    "examples": 201,
+    "queued": 0
+  }
+}
