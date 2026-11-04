@@ -1,0 +1,11 @@
+{
+  "version": "synthetic-mlp-v1",
+  "features": 8,
+  "classes": 3,
+  "seed": 7,
+  "architecture": "8-32-3-relu",
+  "sha256": "5cb311ce383aaac8e98df1016d29aa14b44b46bb56c3e7b57cc6e86731a503b3",
+  "synthetic_only": true,
+  "torch": "2.9.0",
+  "test_accuracy": 0.9900000095367432
+}
