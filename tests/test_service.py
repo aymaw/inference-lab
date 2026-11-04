@@ -1,5 +1,6 @@
 import asyncio
 import json
+import threading
 
 import httpx
 import pytest
@@ -65,17 +66,87 @@ def test_batching_preserves_order_and_matches_direct():
 
 def test_overload_and_cancellation():
     async def scenario():
-        batcher = MicroBatcher(architecture(), capacity=1, wait=0.1)
-        # Before worker starts, admission must reject the second queued request.
+        entered, release = threading.Event(), threading.Event()
+
+        class SlowModel(torch.nn.Module):
+            def forward(self, x):
+                entered.set()
+                assert release.wait(1.0)
+                return torch.zeros((len(x), 3))
+
+        batcher = MicroBatcher(SlowModel(), capacity=1, wait=0)
+        await batcher.start()
         first = asyncio.create_task(batcher.predict([0.0] * 8))
+        assert await asyncio.to_thread(entered.wait, 1.0)
+        queued = asyncio.create_task(batcher.predict([0.0] * 8))
         await asyncio.sleep(0)
         with pytest.raises(Overloaded):
             await batcher.predict([0.0] * 8)
-        first.cancel()
+        queued.cancel()
         with pytest.raises(asyncio.CancelledError):
-            await first
+            await queued
+        release.set()
+        assert sum(await first) == pytest.approx(1.0)
+        await batcher.close()
+        await batcher.close()
+
+    asyncio.run(scenario())
+
+
+def test_inference_does_not_block_event_loop():
+    async def scenario():
+        entered, release, finished = threading.Event(), threading.Event(), threading.Event()
+
+        class SlowModel(torch.nn.Module):
+            def forward(self, x):
+                entered.set()
+                release.wait(1.0)
+                finished.set()
+                return torch.zeros((len(x), 3))
+
+        batcher = MicroBatcher(SlowModel(), wait=0)
         await batcher.start()
-        await asyncio.sleep(0.01)
+        pending = asyncio.create_task(batcher.predict([0.0] * 8))
+        try:
+            assert await asyncio.to_thread(entered.wait, 1.0)
+            assert not finished.is_set(), "Event loop was blocked until inference completed"
+        finally:
+            release.set()
+            await pending
+            await batcher.close()
+
+    asyncio.run(scenario())
+
+
+def test_model_failure_returns_unavailable_without_poisoning_worker(model_dir):
+    class BadModel(torch.nn.Module):
+        def forward(self, x):
+            return torch.full((len(x), 3), float("nan"))
+
+    with TestClient(create_app(model_dir)) as client:
+        client.app.state.batcher.model = BadModel()
+        response = client.post("/v1/predict", json={"features": [0.0] * 8})
+        assert response.status_code == 503
+        assert client.get("/health/ready").status_code == 200
+        client.app.state.batcher.model = architecture().eval()
+        assert client.post("/v1/predict", json={"features": [0.0] * 8}).status_code == 200
+        assert (
+            client.post(
+                "/v1/predict", json={"features": [0.0] * 8, "expected_version": ""}
+            ).status_code
+            == 409
+        )
+
+
+def test_lifecycle_and_configuration_validation():
+    with pytest.raises(ValueError):
+        MicroBatcher(architecture(), capacity=0)
+
+    async def scenario():
+        batcher = MicroBatcher(architecture())
+        with pytest.raises(Overloaded):
+            await batcher.predict([0.0] * 8)
+        await batcher.close()
         await batcher.close()
 
     asyncio.run(scenario())
