@@ -1,6 +1,7 @@
 """Exercise the actual HTTP listener, rather than an in-process ASGI transport."""
 
 import argparse
+import http.client
 import json
 import math
 import time
@@ -15,7 +16,7 @@ def check(base_url):
             with urllib.request.urlopen(base_url + "/health/ready", timeout=2) as response:
                 ready = json.load(response)
             break
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
             if time.monotonic() >= deadline:
                 raise
             time.sleep(0.25)
