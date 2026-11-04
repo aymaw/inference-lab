@@ -17,7 +17,10 @@ A seeded PyTorch MLP learns a synthetic eight-feature, three-class task. The
 FastAPI service loads its weights once during lifespan startup, checks a SHA-256
 manifest, accepts finite bounded vectors, verifies the requested model version,
 and batches concurrent requests. The queue has a fixed capacity; full admission
-or deadlines return 503. Cancellation and shutdown have explicit handling.
+or deadlines return 503. Model calls run serially in a worker thread so the
+event loop can serve health checks and cancellations during inference. Invalid
+model outputs fail the request with 503; the worker can recover for later calls.
+Cancellation and shutdown have explicit handling.
 
 ```mermaid
 flowchart LR
@@ -27,6 +30,7 @@ flowchart LR
     B --> M[PyTorch inference mode]
     M --> P[Versioned probabilities]
 ```
+
 ## Reproduce
 
 ```bash
@@ -44,15 +48,20 @@ CPU is the reference execution device. Full runs and checkpoints go to ignored
 uv run python -m inferlab.train
 uv run uvicorn inferlab.app:app --host 127.0.0.1 --port 8000 --no-access-log
 # In another terminal:
-curl http://127.0.0.1:8000/v1/predict   -H 'Content-Type: application/json'   -d '{"features":[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],"expected_version":"synthetic-mlp-v1"}'
+curl http://127.0.0.1:8000/v1/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"features":[0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2],"expected_version":"synthetic-mlp-v1"}'
 ```
 
 ```bash
 docker build -t inference-lab:local .
-docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges   -p 127.0.0.1:8000:8000 inference-lab:local
+docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+  -p 127.0.0.1:8000:8000 inference-lab:local
 ```
 
-The image trains only its fictional toy task at build time, runs as UID 10001,
+The image pins its Python base digest and uv version, and installs runtime
+dependencies with `uv sync --frozen --no-dev --no-editable` from `uv.lock`.
+It trains only its fictional toy task at build time, runs as UID 10001,
 and has a readiness health check. No model download or training occurs on an
 inference request. `/health/live`, `/health/ready`, and `/metrics` distinguish
 process availability, model availability, and batching counters. Request vectors
@@ -66,6 +75,16 @@ concurrency 16, all 200 successful. These measurements exclude sockets, proxying
 TLS, authentication, and GPU execution; they are not production capacity claims.
 Timing depends on the host. [The training manifest](results/model-manifest.json)
 records the actual synthetic held-out classifier accuracy and checkpoint checksum.
+
+The [container smoke record](results/container-smoke.json) covers an actual HTTP
+request to a running Linux ARM64 container, UID 10001 and a read-only filesystem.
+It is separate from the in-process latency benchmark. CI additionally builds the
+image on Linux x86-64, verifies its UID, and exercises its real HTTP endpoint.
+
+```bash
+# With the local container running on port 8000:
+uv run python tests/container_smoke.py
+```
 
 ## Kubernetes and GPU integration
 
