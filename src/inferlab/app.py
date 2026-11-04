@@ -11,7 +11,7 @@ import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from .batching import MicroBatcher, Overloaded
+from .batching import InferenceFailed, MicroBatcher, Overloaded
 from .train import architecture
 
 FiniteFeature = Annotated[float, Field(ge=-20, le=20, allow_inf_nan=False)]
@@ -55,7 +55,7 @@ def create_app(model_dir=None):
 
     @app.get("/health/ready")
     def ready():
-        if not getattr(app.state, "ready", False):
+        if not getattr(app.state, "ready", False) or not app.state.batcher.running:
             raise HTTPException(503, "Model unavailable")
         return {"ready": True, "version": app.state.version}
 
@@ -70,13 +70,13 @@ def create_app(model_dir=None):
 
     @app.post("/v1/predict")
     async def predict(body: PredictRequest):
-        if not getattr(app.state, "ready", False):
+        if not getattr(app.state, "ready", False) or not app.state.batcher.running:
             raise HTTPException(503, "Model unavailable")
-        if body.expected_version and body.expected_version != app.state.version:
+        if body.expected_version is not None and body.expected_version != app.state.version:
             raise HTTPException(409, "Model version differs")
         try:
             probabilities = await app.state.batcher.predict(body.features)
-        except (Overloaded, asyncio.TimeoutError) as error:
+        except (Overloaded, InferenceFailed, asyncio.TimeoutError) as error:
             raise HTTPException(
                 503, "Capacity unavailable", headers={"Retry-After": "1"}
             ) from error
